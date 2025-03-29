@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Generated content files
+raw_content_*.txt
+processed_content_*.txt
+
+# Environment
+.env
+venv/
+.venv/ 
