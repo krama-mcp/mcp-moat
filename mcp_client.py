@@ -2,6 +2,8 @@ from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 import logging
 import os
+import json
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
@@ -157,37 +159,49 @@ class MCPClient:
                 raise
 
 async def main():
-    """Example usage of the MCP client with different server types"""
-    # Example with Sequential Thinking server
-    st_client = MCPClient(server_type=MCPServerType.SEQUENTIAL_THINKING)
-    try:
-        await st_client.initialize()
-        tools = await st_client.list_available_tools()
-        print("Sequential Thinking Tools:", tools)
-    finally:
-        await st_client.close()
-
-    # Example with Hacker News server
+    """Example usage of the MCP client with Hacker News"""
+    # Initialize Hacker News client
     hn_client = MCPClient(server_type=MCPServerType.HACKER_NEWS)
+    
     try:
         await hn_client.initialize()
-        tools = await hn_client.list_available_tools()
-        print("Hacker News Tools:", tools)
+        logger.info("Fetching latest Hacker News posts...")
+        
+        # Call the get-top-stories tool
+        result = await hn_client.call_tool(
+            "get-top-stories",
+            arguments={"limit": 10}  # Get top 10 stories
+        )
+        
+        # Create timestamp for filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'hackernews_posts_{timestamp}.txt'
+        
+        # Format and save the posts
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write("=== Latest Hacker News Posts ===\n\n")
+            for idx, story in enumerate(result, 1):
+                f.write(f"{idx}. {story.get('title', 'No title')}\n")
+                f.write(f"   URL: {story.get('url', 'No URL')}\n")
+                f.write(f"   Score: {story.get('score', 0)}\n")
+                f.write(f"   Author: {story.get('by', 'Unknown')}\n")
+                f.write(f"   Comments: {story.get('descendants', 0)}\n")
+                f.write("\n")
+        
+        logger.info(f"Saved Hacker News posts to {filename}")
+        
+        # Also save raw JSON for potential further processing
+        json_filename = f'hackernews_posts_{timestamp}.json'
+        with open(json_filename, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2)
+        
+        logger.info(f"Saved raw JSON data to {json_filename}")
+        
+    except Exception as e:
+        logger.error(f"Error fetching Hacker News posts: {e}")
+        raise
     finally:
         await hn_client.close()
-
-    # Example with custom server
-    custom_client = MCPClient(
-        server_type=MCPServerType.CUSTOM,
-        server_command="python",
-        server_args=["example_server.py"],
-    )
-    try:
-        await custom_client.initialize()
-        tools = await custom_client.list_available_tools()
-        print("Custom Server Tools:", tools)
-    finally:
-        await custom_client.close()
 
 if __name__ == "__main__":
     import asyncio
