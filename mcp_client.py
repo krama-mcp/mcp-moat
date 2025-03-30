@@ -52,9 +52,11 @@ class MCPClient:
                 env=env or os.environ.copy()
             )
         elif server_type == MCPServerType.HACKER_NEWS:
+            home_dir = os.path.expanduser("~")
+            server_path = os.path.join(home_dir, ".cursor/community_servers/hn-server/build/index.js")
             return StdioServerParameters(
                 command="node",
-                args=["/.cursor/community_servers/hn-server/build/index.js"],
+                args=[server_path],
                 env=env or os.environ.copy()
             )
         else:
@@ -166,6 +168,10 @@ async def main():
     try:
         await hn_client.initialize()
         logger.info("Fetching latest Hacker News posts...")
+        
+        # First, list available tools to see what we can use
+        tools = await hn_client.list_available_tools()
+        logger.info(f"Available tools: {tools}")
         
         # Call the get-top-stories tool
         result = await hn_client.call_tool(
