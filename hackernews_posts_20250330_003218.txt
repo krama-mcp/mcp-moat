@@ -1,0 +1,64 @@
+=== Latest Hacker News Posts ===
+
+1. Everyone knows all the apps on your phone
+   URL: https://peabee.substack.com/p/everyone-knows-what-apps-you-use
+   Score: 428
+   Author: gniting
+   Comments: 184
+
+2. Show HN: Cloud-Ready Postgres MCP Server
+   URL: https://github.com/stuzero/pg-mcp
+   Score: 58
+   Author: spennant
+   Comments: 10
+   Text: Hey HN,<p>I built pg-mcp, a Model Context Protocol (MCP) server for PostgreSQL that provides structured schema inspection and query execution for LLMs and agents. It&#x27;s multi-tenant and runs over HTTP&#x2F;SSE (not stdio)<p>Features
+ - Supports multiple database connections from multiple agents<p>- Schema Introspection: Returns table structures, types, indexes and constraints; enriched with descriptions from pg_catalog. (for well documented databases)<p>- Read-Only Queries: Controlled execution of queries via MCP.<p>- EXPLAIN Tool: Helps smart agents optimize queries before execution.<p>- Extension Plugins: YAML-based plugin system for Postgres extensions (supports pgvector and postgis out of the box).<p>- Server Mode: Spin up the container and it&#x27;s ready to accept connections at <a href="http:&#x2F;&#x2F;localhost:8000&#x2F;sse" rel="nofollow">http:&#x2F;&#x2F;localhost:8000&#x2F;sse</a>
+
+3. Utah becomes first US state to ban fluoride in its water
+   URL: https://www.bbc.com/news/articles/c4gmggp2y99o
+   Score: 220
+   Author: Jimmc414
+   Comments: 458
+
+4. Bringing Record and Replay debugging everywhere on Linux
+   URL: https://github.com/sidkshatriya/me/blob/master/008-rr-everywhere.md
+   Score: 24
+   Author: sidkshatriya
+   Comments: 3
+
+5. Convert Linux to Windows
+   URL: https://philipbohun.com/blog/0007.html
+   Score: 160
+   Author: pbohun
+   Comments: 183
+
+6. Why Apple's Severance gets edited over remote desktop software
+   URL: https://tedium.co/2025/03/29/severance-apple-remote-editing-weirdness/
+   Score: 426
+   Author: shortformblog
+   Comments: 259
+
+7. Towards fearless SIMD, 7 years later
+   URL: https://linebender.org/blog/towards-fearless-simd/
+   Score: 100
+   Author: raphlinus
+   Comments: 27
+
+8. Atop 2.11 heap problems
+   URL: https://openwall.com/lists/oss-security/2025/03/29/1
+   Score: 132
+   Author: baggy_trough
+   Comments: 52
+
+9. Self-contained Python scripts with uv
+   URL: http://blog.dusktreader.dev/2025/03/29/self-contained-python-scripts-with-uv/
+   Score: 80
+   Author: todsacerdoti
+   Comments: 13
+
+10. Commercials that David Lynch directed (2018)
+   URL: https://www.openculture.com/2018/07/watch-commercials-david-lynch-directed-big-30-minute-compilation.html
+   Score: 119
+   Author: bookofjoe
+   Comments: 26
+
