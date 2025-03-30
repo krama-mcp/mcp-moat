@@ -2,7 +2,8 @@ from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 import logging
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+from enum import Enum
 
 # Configure logging
 logging.basicConfig(
@@ -11,19 +12,57 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class MCPServerType(Enum):
+    SEQUENTIAL_THINKING = "sequential-thinking"
+    HACKER_NEWS = "hacker-news"
+    CUSTOM = "custom"
+
 class MCPClient:
     def __init__(
         self,
-        server_command: str = "python",
+        server_type: MCPServerType = MCPServerType.CUSTOM,
+        server_command: Optional[str] = None,
         server_args: Optional[list] = None,
         server_env: Optional[Dict[str, str]] = None
     ):
-        self.server_params = StdioServerParameters(
-            command=server_command,
-            args=server_args or [],
-            env=server_env or os.environ.copy()
+        self.server_type = server_type
+        self.server_params = self._get_server_params(
+            server_type, server_command, server_args, server_env
         )
         self.session: Optional[ClientSession] = None
+
+    def _get_server_params(
+        self,
+        server_type: MCPServerType,
+        command: Optional[str],
+        args: Optional[list],
+        env: Optional[Dict[str, str]]
+    ) -> StdioServerParameters:
+        """Get server parameters based on server type"""
+        if server_type == MCPServerType.SEQUENTIAL_THINKING:
+            return StdioServerParameters(
+                command="npx",
+                args=[
+                    "~/.cursor/servers/src/sequentialthinking/",
+                    "--yes",
+                    "@modelcontextprotocol/server-sequential-thinking@0.6.2"
+                ],
+                env=env or os.environ.copy()
+            )
+        elif server_type == MCPServerType.HACKER_NEWS:
+            return StdioServerParameters(
+                command="node",
+                args=["/.cursor/community_servers/hn-server/build/index.js"],
+                env=env or os.environ.copy()
+            )
+        else:
+            if not command:
+                raise ValueError("server_command is required for custom server type")
+            return StdioServerParameters(
+                command=command,
+                args=args or [],
+                env=env or os.environ.copy()
+            )
 
     async def handle_sampling_message(
         self,
@@ -54,7 +93,7 @@ class MCPClient:
                 sampling_callback=self.handle_sampling_message
             ).__aenter__()
             await self.session.initialize()
-            logger.info("MCP client session initialized successfully")
+            logger.info(f"MCP client session initialized successfully for {self.server_type.value} server")
         except Exception as e:
             logger.error(f"Failed to initialize MCP client: {e}")
             raise
@@ -118,37 +157,37 @@ class MCPClient:
                 raise
 
 async def main():
-    """Example usage of the MCP client"""
-    client = MCPClient(
+    """Example usage of the MCP client with different server types"""
+    # Example with Sequential Thinking server
+    st_client = MCPClient(server_type=MCPServerType.SEQUENTIAL_THINKING)
+    try:
+        await st_client.initialize()
+        tools = await st_client.list_available_tools()
+        print("Sequential Thinking Tools:", tools)
+    finally:
+        await st_client.close()
+
+    # Example with Hacker News server
+    hn_client = MCPClient(server_type=MCPServerType.HACKER_NEWS)
+    try:
+        await hn_client.initialize()
+        tools = await hn_client.list_available_tools()
+        print("Hacker News Tools:", tools)
+    finally:
+        await hn_client.close()
+
+    # Example with custom server
+    custom_client = MCPClient(
+        server_type=MCPServerType.CUSTOM,
         server_command="python",
         server_args=["example_server.py"],
     )
-
     try:
-        # Initialize the client
-        await client.initialize()
-
-        # List available tools
-        tools = await client.list_available_tools()
-        print("Available tools:", tools)
-
-        # List available resources
-        resources = await client.list_available_resources()
-        print("Available resources:", resources)
-
-        # Example tool call
-        result = await client.call_tool(
-            "example-tool",
-            arguments={"param1": "value1"}
-        )
-        print("Tool call result:", result)
-
-    except Exception as e:
-        logger.error(f"Error in main execution: {e}")
-        raise
+        await custom_client.initialize()
+        tools = await custom_client.list_available_tools()
+        print("Custom Server Tools:", tools)
     finally:
-        # Ensure the client is properly closed
-        await client.close()
+        await custom_client.close()
 
 if __name__ == "__main__":
     import asyncio
