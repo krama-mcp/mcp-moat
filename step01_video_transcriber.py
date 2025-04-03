@@ -17,7 +17,7 @@ class VideoTranscriber:
     def __init__(self):
         self.model = whisper.load_model("base")
         self.desktop_path = str(Path.home() / "Desktop")
-        self.source_folder = os.path.join(self.desktop_path, "wisdomhatch")
+        self.source_folder = os.path.join(self.desktop_path, "wisdomhatch2")
         self.output_folder = os.path.join(str(Path.home()), "cgithub", "mcp-moat", "wisdomhatch-txt")
         
     def setup_output_folder(self):
