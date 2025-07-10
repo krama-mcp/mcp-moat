@@ -2,6 +2,7 @@ import os
 import whisper
 import datetime
 import logging
+import argparse
 from pathlib import Path
 
 # Configure logging
@@ -14,11 +15,23 @@ logger = logging.getLogger(__name__)
 class VideoTranscriber:
     """A class to transcribe videos using Whisper"""
     
-    def __init__(self):
+    def __init__(self, input_folder=None, output_folder=None):
         self.model = whisper.load_model("base")
-        self.desktop_path = str(Path.home() / "Desktop")
-        self.source_folder = os.path.join(self.desktop_path, "wisdomhatch2")
-        self.output_folder = os.path.join(str(Path.home()), "cgithub", "mcp-moat", "wisdomhatch-txt")
+        
+        # Set default paths if not provided
+        if input_folder is None:
+            self.desktop_path = str(Path.home() / "Desktop")
+            self.source_folder = os.path.join(self.desktop_path, "wisdomhatch2")
+        else:
+            self.source_folder = input_folder
+            
+        if output_folder is None:
+            self.output_folder = os.path.join(str(Path.home()), "cgithub", "mcp-moat", "wisdomhatch-txt")
+        else:
+            self.output_folder = output_folder
+            
+        logger.info(f"Input folder: {self.source_folder}")
+        logger.info(f"Output folder: {self.output_folder}")
         
     def setup_output_folder(self):
         """Create output folder if it doesn't exist"""
@@ -100,10 +113,27 @@ class VideoTranscriber:
             logger.error(f"Error in process_all_videos: {e}")
             raise
 
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Transcribe videos using Whisper')
+    parser.add_argument('-i', '--input', dest='input_folder', 
+                        help='Input folder containing video files')
+    parser.add_argument('-o', '--output', dest='output_folder',
+                        help='Output folder for transcript files')
+    return parser.parse_args()
+
 def main():
     """Main function to run the video transcription process"""
     try:
-        transcriber = VideoTranscriber()
+        # Parse command line arguments
+        args = parse_arguments()
+        
+        # Create transcriber with provided arguments
+        transcriber = VideoTranscriber(
+            input_folder=args.input_folder,
+            output_folder=args.output_folder
+        )
+        
         transcriber.process_all_videos()
         logger.info("Video transcription process completed")
     except Exception as e:

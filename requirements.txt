@@ -1,4 +1,9 @@
 requests==2.31.0
 pathlib>=1.0.1
 typing>=3.7.4.3
-python-dotenv==1.0.0 
+python-dotenv==1.0.0
+openai-whisper==20231117
+
+# System dependencies (not installable via pip):
+# - ffmpeg: required by whisper for audio processing
+#   Install with: conda install -c conda-forge ffmpeg

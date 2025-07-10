@@ -5,6 +5,7 @@ from typing import List, Dict, Set
 import requests
 import datetime
 import json
+import argparse
 from time import sleep
 from dotenv import load_dotenv
 
@@ -21,25 +22,43 @@ logger = logging.getLogger(__name__)
 class TranscriptSummarizer:
     """A class to summarize transcripts using the Fireworks AI API"""
     
-    def __init__(self):
+    def __init__(self, input_folder=None, output_folder=None):
         self.base_path = str(Path.home() / "cgithub" / "mcp-moat")
-        self.input_folder = os.path.join(self.base_path, "wisdomhatch-txt")
-        self.output_folder = os.path.join(self.base_path, "wisdomhatch-blog")
         
-        # Fireworks AI API configuration
-        self.api_url = "https://router.huggingface.co/fireworks-ai/inference/v1/chat/completions"
-        self.api_key = os.getenv('HUGGINGFACE_API_KEY')
+        # Set default paths if not provided
+        if input_folder is None:
+            self.input_folder = os.path.join(self.base_path, "wisdomhatch-txt")
+        else:
+            self.input_folder = input_folder
+            
+        if output_folder is None:
+            self.output_folder = os.path.join(self.base_path, "wisdomhatch-blog")
+        else:
+            self.output_folder = output_folder
+            
+        logger.info(f"Input folder: {self.input_folder}")
+        logger.info(f"Output folder: {self.output_folder}")
         
-        if not self.api_key or self.api_key == 'your_api_key_here':
+        # Azure OpenAI API configuration
+        self.api_key = os.getenv('AZURE_OPENAI_API_KEY')
+        self.api_endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
+        self.deployment_name = os.getenv('AZURE_OPENAI_DEPLOYMENT')
+        self.api_version = os.getenv('AZURE_OPENAI_API_VERSION', '2024-02-15-preview')
+        
+        # Construct the API URL
+        self.api_url = f"{self.api_endpoint}openai/deployments/{self.deployment_name}/chat/completions?api-version={self.api_version}"
+        
+        if not self.api_key or self.api_key == 'your_api_key_here' or not self.api_endpoint:
             raise ValueError(
-                "Please set your Hugging Face API key in the .env file\n"
+                "Please set your Azure OpenAI API credentials in the .env file\n"
                 "1. Open mcp-moat/.env\n"
-                "2. Replace 'your_api_key_here' with your actual API key\n"
+                "2. Replace the placeholder values with your actual Azure OpenAI credentials\n"
                 "3. Save the file and run the script again"
             )
             
         self.headers = {
-            "Authorization": f"Bearer {self.api_key}"
+            "api-key": f"{self.api_key}",
+            "Content-Type": "application/json"
         }
         
         # Rate limiting configuration
@@ -88,30 +107,41 @@ class TranscriptSummarizer:
         return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
     
     def query_api(self, payload):
-        """Query the Fireworks AI API with streaming response"""
-        response = requests.post(self.api_url, headers=self.headers, json=payload, stream=True)
-        
-        if response.status_code == 429:  # Rate limit exceeded
-            logger.warning("Rate limit exceeded. Waiting before retry...")
-            sleep(self.retry_delay)
-            raise Exception("Rate limit exceeded")
-        elif response.status_code == 402:  # Payment required
-            logger.error("API quota exceeded. Please upgrade your plan.")
-            raise Exception("API quota exceeded")
-        elif response.status_code != 200:
-            raise Exception(f"API request failed with status code: {response.status_code}")
+        """Query the Azure OpenAI API"""
+        try:
+            response = requests.post(
+                self.api_url,
+                headers=self.headers,
+                json=payload,
+                timeout=120
+            )
             
-        for line in response.iter_lines():
-            if not line.startswith(b"data:"):
-                continue
-            if line.strip() == b"data: [DONE]":
-                return
-            yield json.loads(line.decode("utf-8").lstrip("data:").rstrip("/n"))
-        
-        sleep(self.request_delay)  # Rate limiting delay
+            if response.status_code == 429:  # Rate limit exceeded
+                logger.warning("Rate limit exceeded. Waiting before retry...")
+                sleep(self.retry_delay)
+                raise Exception("Rate limit exceeded")
+            elif response.status_code == 401:  # Unauthorized
+                logger.error("API authentication failed. Check your API key.")
+                raise Exception("API authentication failed")
+            elif response.status_code == 400:  # Bad request
+                logger.error(f"Bad request: {response.text}")
+                raise Exception(f"Bad request: {response.text}")
+            elif response.status_code != 200:
+                logger.error(f"API request failed with status code: {response.status_code}, response: {response.text}")
+                raise Exception(f"API request failed with status code: {response.status_code}")
+                
+            # Parse the response
+            json_response = response.json()
+            return json_response
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error: {e}")
+            raise
+        finally:
+            sleep(self.request_delay)  # Rate limiting delay
     
     def generate_summary(self, text: str) -> Dict[str, str]:
-        """Generate summary and key takeaways using the Fireworks AI API"""
+        """Generate summary and key takeaways using the Azure OpenAI API"""
         # Prepare the text for summarization
         text_to_summarize = text[:10000]  # Using full chunk size of 10000 characters
         
@@ -138,9 +168,8 @@ Key Takeaways:
                     "content": prompt
                 }
             ],
-            "max_tokens": 20000,
-            "model": "accounts/fireworks/models/deepseek-v3-0324",
-            "stream": True
+            "max_tokens": 4000,
+            "temperature": 0
         }
         
         retry_count = 0
@@ -148,42 +177,41 @@ Key Takeaways:
         
         while retry_count < self.max_retries:
             try:
-                # Collect the streamed response
-                full_response = ""
-                chunks = self.query_api(payload)
+                # Make API request
+                response = self.query_api(payload)
                 
-                for chunk in chunks:
-                    if "choices" in chunk and len(chunk["choices"]) > 0:
-                        delta = chunk["choices"][0].get("delta", {})
-                        if "content" in delta:
-                            full_response += delta["content"]
-                
-                # Extract summary and takeaways from response
-                parts = full_response.split("Summary:")
-                if len(parts) > 1:
-                    content = parts[1].strip()
-                    summary_parts = content.split("Key Takeaways:")
+                # Extract the response content
+                if "choices" in response and len(response["choices"]) > 0:
+                    full_response = response["choices"][0]["message"]["content"].strip()
                     
-                    summary = summary_parts[0].strip()
-                    takeaways = summary_parts[1].strip() if len(summary_parts) > 1 else ""
-                    
-                    return {
-                        "summary": summary,
-                        "takeaways": takeaways
-                    }
+                    # Extract summary and takeaways from response
+                    parts = full_response.split("Summary:")
+                    if len(parts) > 1:
+                        content = parts[1].strip()
+                        summary_parts = content.split("Key Takeaways:")
+                        
+                        summary = summary_parts[0].strip()
+                        takeaways = summary_parts[1].strip() if len(summary_parts) > 1 else ""
+                        
+                        return {
+                            "summary": summary,
+                            "takeaways": takeaways
+                        }
+                    else:
+                        return {
+                            "summary": full_response.strip(),
+                            "takeaways": "No specific takeaways extracted."
+                        }
                 else:
-                    return {
-                        "summary": full_response.strip(),
-                        "takeaways": "No specific takeaways extracted."
-                    }
+                    raise Exception("Invalid response format from API")
                     
             except Exception as e:
                 last_error = str(e)
                 logger.error(f"Error in API request: {e}")
                 retry_count += 1
                 
-                if "API quota exceeded" in str(e):
-                    logger.error("API quota exceeded. Stopping processing.")
+                if "authentication failed" in str(e).lower():
+                    logger.error("API authentication failed. Check your API key.")
                     raise
                     
                 if retry_count < self.max_retries:
@@ -277,10 +305,27 @@ Key Takeaways:
             logger.error(f"Error in process_all_transcripts: {e}")
             raise
 
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Summarize transcripts using Fireworks AI API')
+    parser.add_argument('-i', '--input', dest='input_folder', 
+                        help='Input folder containing transcript files')
+    parser.add_argument('-o', '--output', dest='output_folder',
+                        help='Output folder for summary files')
+    return parser.parse_args()
+
 def main():
     """Main function to run the transcript summarization process"""
     try:
-        summarizer = TranscriptSummarizer()
+        # Parse command line arguments
+        args = parse_arguments()
+        
+        # Create summarizer with provided arguments
+        summarizer = TranscriptSummarizer(
+            input_folder=args.input_folder,
+            output_folder=args.output_folder
+        )
+        
         summarizer.process_all_transcripts()
         logger.info("Transcript summarization process completed")
     except Exception as e:
