@@ -1,5 +1,4 @@
 import os
-import logging
 from pathlib import Path
 from typing import List, Dict, Set
 import requests
@@ -8,16 +7,13 @@ import json
 import argparse
 from time import sleep
 from dotenv import load_dotenv
+from progress_utils import ProgressTracker, setup_logging
 
 # Load environment variables
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = setup_logging(__name__)
 
 class TranscriptSummarizer:
     """A class to summarize transcripts using the Fireworks AI API"""
@@ -276,31 +272,48 @@ Key Takeaways:
             raise
     
     def process_all_transcripts(self):
-        """Process all transcripts that haven't been processed yet"""
+        """Process all transcripts with progress tracking"""
         try:
             # Setup output folder
             self.setup_folders()
-            
+
             # Get list of unprocessed transcript files
             transcript_files = self.get_transcript_files()
-            
+
             if not transcript_files:
                 logger.info("No new transcript files to process")
                 return
-            
-            logger.info(f"Found {len(transcript_files)} new transcript files to process")
-            
+
+            # Initialize progress tracker
+            progress_tracker = ProgressTracker(
+                total_items=len(transcript_files),
+                task_name="Transcript Summarization"
+            )
+            progress_tracker.start()
+
             # Process each transcript
             for transcript_file in transcript_files:
                 try:
+                    file_name = os.path.basename(transcript_file)
+                    progress_tracker.start_item(file_name)
+
                     self.process_transcript(transcript_file)
+
+                    progress_tracker.complete_item(file_name, success=True)
                 except Exception as e:
+                    file_name = os.path.basename(transcript_file)
+                    progress_tracker.complete_item(file_name, success=False)
+
                     if "API quota exceeded" in str(e):
                         logger.error("API quota exceeded. Stopping all processing.")
                         break
                     logger.error(f"Failed to process {transcript_file}: {e}")
                     continue
-                    
+
+            # Show final summary
+            progress_tracker.finish()
+            print(f"  📁 Output directory: {self.output_folder}")
+
         except Exception as e:
             logger.error(f"Error in process_all_transcripts: {e}")
             raise

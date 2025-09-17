@@ -3,6 +3,8 @@ pathlib>=1.0.1
 typing>=3.7.4.3
 python-dotenv==1.0.0
 openai-whisper==20231117
+PyPDF2==3.0.1
+pdfplumber==0.11.4
 
 # System dependencies (not installable via pip):
 # - ffmpeg: required by whisper for audio processing

@@ -10,4 +10,14 @@ processed_content_*.txt
 # Environment
 .env
 venv/
-.venv/ 
+.venv/
+
+# Ignore all directories and their contents except those starting with 'z'
+*/
+!z*/
+
+# OS files
+.DS_Store
+
+# Archives
+*.zip 

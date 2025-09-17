@@ -14,6 +14,7 @@ import re
 import shutil
 import argparse
 from pathlib import Path
+from progress_utils import ProgressTracker
 
 def extract_key_takeaways(content):
     """
@@ -37,7 +38,7 @@ def extract_key_takeaways(content):
 def process_files(input_dir, output_dir):
     """
     Process all files in the input directory and extract KEY TAKEAWAYS to the output directory.
-    
+
     Args:
         input_dir (str): Path to the input directory containing files to process
         output_dir (str): Path to the output directory where processed files will be saved
@@ -46,37 +47,57 @@ def process_files(input_dir, output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         print(f"Created output directory: {output_dir}")
-    
-    files_processed = 0
-    files_with_takeaways = 0
-    
-    # Process each file in the input directory
+
+    # Get list of files to process
+    files_to_process = []
     for filename in os.listdir(input_dir):
         input_file_path = os.path.join(input_dir, filename)
-        
-        # Skip directories
-        if not os.path.isfile(input_file_path):
-            continue
-            
-        files_processed += 1
-        
-        # Read the content of the file
-        with open(input_file_path, 'r', encoding='utf-8') as file:
-            content = file.read()
-        
-        # Extract the key takeaways
-        key_takeaways = extract_key_takeaways(content)
-        
-        # Only create output file if KEY TAKEAWAYS section was found
-        if key_takeaways is not None:
-            files_with_takeaways += 1
-            
-            # Write the key takeaways to the corresponding file in the output directory
-            output_file_path = os.path.join(output_dir, filename)
-            with open(output_file_path, 'w', encoding='utf-8') as file:
-                file.write(key_takeaways)
-    
-    print(f"Processed {files_processed} files from '{input_dir}', extracted takeaways from {files_with_takeaways} files")
+        if os.path.isfile(input_file_path):
+            files_to_process.append((filename, input_file_path))
+
+    if not files_to_process:
+        print(f"No files found in '{input_dir}'")
+        return
+
+    # Initialize progress tracker
+    progress_tracker = ProgressTracker(
+        total_items=len(files_to_process),
+        task_name="Key Takeaways Extraction"
+    )
+    progress_tracker.start()
+
+    # Process each file
+    for filename, input_file_path in files_to_process:
+        try:
+            progress_tracker.start_item(filename)
+
+            # Read the content of the file
+            with open(input_file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+
+            # Extract the key takeaways
+            key_takeaways = extract_key_takeaways(content)
+
+            # Only create output file if KEY TAKEAWAYS section was found
+            if key_takeaways is not None:
+                # Write the key takeaways to the corresponding file
+                output_file_path = os.path.join(output_dir, filename)
+                with open(output_file_path, 'w', encoding='utf-8') as file:
+                    file.write(key_takeaways)
+
+                progress_tracker.complete_item(filename, success=True)
+            else:
+                # No takeaways found, but not an error
+                progress_tracker.complete_item(filename, success=True)
+                print(f"   ℹ️  No KEY TAKEAWAYS section found")
+
+        except Exception as e:
+            progress_tracker.complete_item(filename, success=False)
+            print(f"   Error processing {filename}: {e}")
+
+    # Show final summary
+    progress_tracker.finish()
+    print(f"  📁 Output directory: {output_dir}")
 
 if __name__ == "__main__":
     # Set up command-line argument parser
