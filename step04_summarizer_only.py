@@ -22,7 +22,7 @@ def extract_key_takeaways(content):
     Returns None if no KEY TAKEAWAYS section is found.
     """
     # Find the KEY TAKEAWAYS section - handle different formatting variations
-    key_takeaways_match = re.search(r'KEY TAKEAWAYS:(?:\s*\*\*)?\s*(.*?)(?=\n\s*ORIGINAL TEXT:|$)', 
+    key_takeaways_match = re.search(r'(?:##\s*)?KEY TAKEAWAYS:(?:\s*\*\*)?\s*(.*?)(?=\n\s*(?:##\s*)?ORIGINAL TEXT:|$)',
                                    content, re.DOTALL)
     
     if not key_takeaways_match:
@@ -31,9 +31,9 @@ def extract_key_takeaways(content):
     
     # Get the key takeaways content
     key_takeaways = key_takeaways_match.group(1).strip()
-    
-    # Format the output
-    return f"KEY TAKEAWAYS:\n{key_takeaways}"
+
+    # Format the output with markdown
+    return f"## KEY TAKEAWAYS:\n\n{key_takeaways}"
 
 def process_files(input_dir, output_dir):
     """
@@ -80,8 +80,9 @@ def process_files(input_dir, output_dir):
 
             # Only create output file if KEY TAKEAWAYS section was found
             if key_takeaways is not None:
-                # Write the key takeaways to the corresponding file
-                output_file_path = os.path.join(output_dir, filename)
+                # Write the key takeaways to the corresponding file with .md extension
+                base_filename = os.path.splitext(filename)[0]
+                output_file_path = os.path.join(output_dir, f"{base_filename}.md")
                 with open(output_file_path, 'w', encoding='utf-8') as file:
                     file.write(key_takeaways)
 

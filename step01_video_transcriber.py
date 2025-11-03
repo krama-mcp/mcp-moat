@@ -38,8 +38,8 @@ class VideoTranscriber:
         logger.info(f"Output folder ready at: {self.output_folder}")
     
     def get_video_files(self):
-        """Get list of video files from source folder"""
-        video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.wmv')
+        """Get list of video and audio files from source folder"""
+        video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.wmv', '.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.wma')
         video_files = []
 
         if not os.path.exists(self.source_folder):
@@ -101,7 +101,7 @@ class VideoTranscriber:
             video_files = self.get_video_files()
 
             if not video_files:
-                logger.warning(f"No video files found in {self.source_folder}")
+                logger.warning(f"No video or audio files found in {self.source_folder}")
                 return
 
             # Initialize progress tracker

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Video Transcription Pipeline
-# This script runs all 4 steps to transcribe videos and generate summaries
+# Media Transcription Pipeline
+# This script runs all 4 steps to transcribe videos/audio and generate summaries
 
 set -e  # Exit on error
 
@@ -32,12 +32,12 @@ SUMMARIZE_OUTPUT=""
 AUTO_GENERATE=true
 
 usage() {
-    echo "Usage: $0 [VIDEO_DIR] [OPTIONS]"
+    echo "Usage: $0 [MEDIA_DIR] [OPTIONS]"
     echo ""
-    echo "Video Transcription Pipeline - Transcribes videos and generates summaries"
+    echo "Media Transcription Pipeline - Transcribes videos/audio and generates summaries"
     echo ""
     echo "Arguments:"
-    echo "  VIDEO_DIR                Input video directory (required)"
+    echo "  MEDIA_DIR                Input media directory (video or audio files, required)"
     echo ""
     echo "Options:"
     echo "  -t, --txt-output DIR     Override text output directory (default: auto-generated)"
@@ -46,12 +46,12 @@ usage() {
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Examples:"
-    echo "  # Transcribe videos with auto-generated output directories"
+    echo "  # Transcribe media with auto-generated output directories"
     echo "  $0 ~/Desktop/my-videos"
     echo "    Creates: my-videos-txt, my-videos-blog, my-videos-summarize"
     echo ""
-    echo "  $0 ~/Videos/lecture-recordings"
-    echo "    Creates: lecture-recordings-txt, lecture-recordings-blog, lecture-recordings-summarize"
+    echo "  $0 ~/Music/podcasts"
+    echo "    Creates: podcasts-txt, podcasts-blog, podcasts-summarize"
     echo ""
     echo "  # Transcribe with custom output directories"
     echo "  $0 ~/Desktop/conference-talks -t transcripts -b summaries"
@@ -94,9 +94,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Check if video directory was provided
+# Check if media directory was provided
 if [ -z "$VIDEO_DIR" ]; then
-    print_error "Video directory is required"
+    print_error "Media directory is required"
     echo ""
     usage
 fi
@@ -105,23 +105,55 @@ fi
 VIDEO_DIR="${VIDEO_DIR/#\~/$HOME}"
 VIDEO_DIR="$(realpath "$VIDEO_DIR" 2>/dev/null || echo "$VIDEO_DIR")"
 
+# Get the base name of the input directory (last component of the path)
+BASE_NAME=$(basename "$VIDEO_DIR")
+
+# Check if source folder already has -txt suffix
+SKIP_TRANSCRIPTION=false
+if [[ "$BASE_NAME" == *-txt ]]; then
+    print_info "Input folder has -txt suffix, checking for existing transcripts..."
+
+    # Check if directory exists
+    if [ ! -d "$VIDEO_DIR" ]; then
+        print_error "Transcript directory does not exist: $VIDEO_DIR"
+        exit 1
+    fi
+
+    # Check if there are any .txt files with content
+    TXT_FILE_FOUND=false
+    for file in "$VIDEO_DIR"/*.txt; do
+        if [ -f "$file" ] && [ -s "$file" ]; then
+            TXT_FILE_FOUND=true
+            break
+        fi
+    done
+
+    if [ "$TXT_FILE_FOUND" = false ]; then
+        print_error "No .txt files with content found in $VIDEO_DIR"
+        echo "Expected to find transcript files since directory has -txt suffix"
+        exit 1
+    fi
+
+    # Set TXT_OUTPUT to the source directory itself since it contains transcripts
+    TXT_OUTPUT="$VIDEO_DIR"
+    SKIP_TRANSCRIPTION=true
+    print_success "Found existing transcripts, will skip video transcription step"
+fi
+
 # Extract the base name from the video directory for auto-generation
 if [ "$AUTO_GENERATE" = true ] || [ -z "$TXT_OUTPUT" ] || [ -z "$BLOG_OUTPUT" ] || [ -z "$SUMMARIZE_OUTPUT" ]; then
-    # Get the base name of the video directory (last component of the path)
-    BASE_NAME=$(basename "$VIDEO_DIR")
-
-    # Remove common suffixes like numbers, dates, or "videos" to get cleaner names
-    CLEAN_NAME=$(echo "$BASE_NAME" | sed -E 's/[-_]?(videos?|vids?|[0-9]+|20[0-9]{2})$//i')
+    # Remove common suffixes like numbers, dates, or "videos/audio" to get cleaner names
+    CLEAN_NAME=$(echo "$BASE_NAME" | sed -E 's/[-_]?(videos?|vids?|audios?|[0-9]+|20[0-9]{2}|txt)$//i')
     [ -z "$CLEAN_NAME" ] && CLEAN_NAME="$BASE_NAME"
 
-    # Auto-generate output directories if not specified
+    # Auto-generate output directories if not specified (only if not already set by SKIP_TRANSCRIPTION logic)
     [ -z "$TXT_OUTPUT" ] && TXT_OUTPUT="${CLEAN_NAME}-txt"
     [ -z "$BLOG_OUTPUT" ] && BLOG_OUTPUT="${CLEAN_NAME}-blog"
     [ -z "$SUMMARIZE_OUTPUT" ] && SUMMARIZE_OUTPUT="${CLEAN_NAME}-summarize"
 fi
 
 echo "========================================="
-echo "Video Transcription Pipeline"
+echo "Media Transcription Pipeline"
 echo "========================================="
 echo ""
 
@@ -180,7 +212,7 @@ if [ "$CURRENT_ENV" != "mcp-moat" ]; then
     print_success "Activated mcp-moat environment"
 fi
 print_info "Configuration:"
-echo "  Video Directory: $VIDEO_DIR"
+echo "  Media Directory: $VIDEO_DIR"
 echo "  Text Output: $TXT_OUTPUT"
 echo "  Blog Output: $BLOG_OUTPUT"
 echo "  Summarize Output: $SUMMARIZE_OUTPUT"
@@ -189,8 +221,8 @@ echo ""
 
 # Check if required directories exist or can be created
 if [ ! -d "$VIDEO_DIR" ]; then
-    print_error "Video directory does not exist: $VIDEO_DIR"
-    echo "Please ensure the video directory exists and contains video files."
+    print_error "Media directory does not exist: $VIDEO_DIR"
+    echo "Please ensure the media directory exists and contains video or audio files."
     exit 1
 fi
 
@@ -223,19 +255,31 @@ print_success "All prerequisites checked"
 echo ""
 
 # Create output directories if they don't exist
-mkdir -p "$TXT_OUTPUT" "$BLOG_OUTPUT" "$SUMMARIZE_OUTPUT"
+if [ "$SKIP_TRANSCRIPTION" = true ]; then
+    # TXT_OUTPUT already exists, only create blog and summarize directories
+    mkdir -p "$BLOG_OUTPUT" "$SUMMARIZE_OUTPUT"
+else
+    mkdir -p "$TXT_OUTPUT" "$BLOG_OUTPUT" "$SUMMARIZE_OUTPUT"
+fi
 
 # Step 1: Video Transcriber
-echo "Step 1/4: Running Video Transcriber..."
-echo "-----------------------------------------"
-if [ -f "step01_video_transcriber.py" ]; then
-    python3 step01_video_transcriber.py --input "$VIDEO_DIR" --output "$TXT_OUTPUT"
-    print_success "Step 1 completed"
+if [ "$SKIP_TRANSCRIPTION" = true ]; then
+    echo "Step 1/4: Video Transcription (SKIPPED)"
+    echo "-----------------------------------------"
+    print_info "Using existing transcripts from: $TXT_OUTPUT"
+    echo ""
 else
-    print_error "step01_video_transcriber.py not found"
-    exit 1
+    echo "Step 1/4: Running Video Transcriber..."
+    echo "-----------------------------------------"
+    if [ -f "step01_video_transcriber.py" ]; then
+        python3 step01_video_transcriber.py --input "$VIDEO_DIR" --output "$TXT_OUTPUT"
+        print_success "Step 1 completed"
+    else
+        print_error "step01_video_transcriber.py not found"
+        exit 1
+    fi
+    echo ""
 fi
-echo ""
 
 # Step 2: Transcript Summarizer
 echo "Step 2/4: Running Transcript Summarizer..."
@@ -274,7 +318,7 @@ fi
 echo ""
 
 echo "========================================="
-print_success "Video transcription pipeline completed!"
+print_success "Media transcription pipeline completed!"
 echo "========================================="
 echo ""
 echo "Output directories:"

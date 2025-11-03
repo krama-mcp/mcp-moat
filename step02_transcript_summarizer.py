@@ -72,8 +72,8 @@ class TranscriptSummarizer:
         processed = set()
         if os.path.exists(self.output_folder):
             for file in os.listdir(self.output_folder):
-                if file.endswith('.txt'):
-                    # Remove _partX.txt from the end to get base name
+                if file.endswith('.md'):
+                    # Remove _partX.md from the end to get base name
                     base_name = file.rsplit('_part', 1)[0]
                     processed.add(base_name)
         return processed
@@ -98,9 +98,40 @@ class TranscriptSummarizer:
         
         return unprocessed_files
     
-    def chunk_text(self, text: str, chunk_size: int = 10000) -> List[str]:
-        """Split text into chunks of specified size"""
-        return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+    def chunk_text(self, text: str, chunk_size: int = 10000, overlap: int = 100) -> List[str]:
+        """Split text into chunks with overlap from previous chunk for context continuity
+
+        Args:
+            text: Text to split into chunks
+            chunk_size: Size of each chunk in characters
+            overlap: Number of characters to overlap from the end of previous chunk
+
+        Returns:
+            List of text chunks with overlap
+        """
+        if len(text) <= chunk_size:
+            return [text]
+
+        chunks = []
+        start = 0
+
+        while start < len(text):
+            # For chunks after the first one, include overlap from previous chunk
+            if start > 0:
+                start = max(0, start - overlap)
+
+            end = start + chunk_size
+            chunk = text[start:end]
+            chunks.append(chunk)
+
+            # Move start position for next chunk (accounting for overlap)
+            start = end
+
+            # Break if we've reached the end
+            if end >= len(text):
+                break
+
+        return chunks
     
     def query_api(self, payload):
         """Query the Azure OpenAI API"""
@@ -237,7 +268,7 @@ Key Takeaways:
                     # Check if this specific part exists
                     output_file = os.path.join(
                         self.output_folder,
-                        f"{base_name}_part{i}.txt"
+                        f"{base_name}_part{i}.md"
                     )
                     
                     if os.path.exists(output_file):
@@ -247,16 +278,16 @@ Key Takeaways:
                     # Generate summary
                     result = self.generate_summary(chunk)
                     
-                    # Create output file
+                    # Create output file with markdown formatting
                     with open(output_file, 'w', encoding='utf-8') as f:
-                        f.write(f"Summary for: {base_name} - Part {i}\n")
-                        f.write(f"Generated on: {datetime.datetime.now()}\n")
-                        f.write("=" * 50 + "\n\n")
-                        f.write("SUMMARY:\n")
+                        f.write(f"# Summary for: {base_name} - Part {i}\n\n")
+                        f.write(f"**Generated on:** {datetime.datetime.now()}\n\n")
+                        f.write("---\n\n")
+                        f.write("## SUMMARY:\n\n")
                         f.write(result['summary'])
-                        f.write("\n\nKEY TAKEAWAYS:\n")
+                        f.write("\n\n## KEY TAKEAWAYS:\n\n")
                         f.write(result['takeaways'])
-                        f.write("\n\nORIGINAL TEXT:\n")
+                        f.write("\n\n## ORIGINAL TEXT:\n\n")
                         f.write(chunk)
                     
                     logger.info(f"Saved summary part {i} to: {output_file}")
