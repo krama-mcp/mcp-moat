@@ -9,7 +9,9 @@ The script automatically:
 1. Groups files by base name (e.g., all files with "StepByStepClass1_part*" are grouped)
 2. Merges all parts in order
 3. Extracts key takeaways from the merged content
-4. Generates an engaging LinkedIn post
+4. Generates an engaging LinkedIn post for each source
+5. If multiple source files exist (>1), automatically creates a "merged-final-post.md"
+   that synthesizes all individual posts into one cohesive viral post
 
 Usage:
     # Using default behavior (auto-generates output folder with "-post" suffix)
@@ -21,6 +23,17 @@ Usage:
 
 Example:
     python step05_generate_linkedin_post.py -i /Users/kiran.ramanna/Documents/github/mcp-moat/ryan-summarize
+
+    # If toon-summarize has 3 different sources:
+    # - can_you_reference_internet.md
+    # - 005-compass_artifact.md
+    # - data2_analysis.md
+    #
+    # Output in toon-post will be:
+    # - can_you_reference_internet.md (individual post)
+    # - 005-compass_artifact.md (individual post)
+    # - data2_analysis.md (individual post)
+    # - merged-final-post.md (synthesized from all 3 posts)
 """
 
 import os
@@ -250,19 +263,19 @@ class LinkedInPostGenerator:
             Extracted key takeaways or None if not found
         """
         # Find all KEY TAKEAWAYS sections - handle different formatting variations
-        # Pattern 1: Look for KEY TAKEAWAYS: followed by content
+        # Pattern 1: Look for KEY TAKEAWAYS: followed by content until next section or end
         takeaways_sections = re.findall(
-            r'(?:##\s*)?KEY TAKEAWAYS:(?:\s*\*\*)?\s*(.*?)(?=\n\s*(?:##\s*(?:SUMMARY|ORIGINAL TEXT|KEY TAKEAWAYS):|$))',
+            r'(?:##\s*)?KEY TAKEAWAYS:(?:\s*\*\*)?\s*(.*?)(?=\n\s*##\s*(?:SUMMARY|ORIGINAL TEXT|KEY TAKEAWAYS):|\Z)',
             content,
             re.DOTALL | re.IGNORECASE
         )
 
         # If pattern 1 didn't find anything, try a simpler pattern for files that contain only KEY TAKEAWAYS
         if not takeaways_sections:
-            # Check if the content starts with KEY TAKEAWAYS:
-            if re.match(r'^KEY TAKEAWAYS:', content.strip(), re.IGNORECASE):
+            # Check if the content starts with KEY TAKEAWAYS: (with or without ##)
+            if re.match(r'^(?:##\s*)?KEY TAKEAWAYS:', content.strip(), re.IGNORECASE):
                 # Extract everything after "KEY TAKEAWAYS:"
-                match = re.search(r'^KEY TAKEAWAYS:\s*(.*)', content.strip(), re.DOTALL | re.IGNORECASE)
+                match = re.search(r'^(?:##\s*)?KEY TAKEAWAYS:\s*(.*)', content.strip(), re.DOTALL | re.IGNORECASE)
                 if match:
                     return match.group(1).strip()
 
@@ -535,6 +548,107 @@ categories: {categories_list}
 
         return "\n\n".join(formatted_sections)
 
+    def get_all_generated_posts(self):
+        """
+        Collect all generated LinkedIn posts from the output folder
+
+        Returns:
+            List of dictionaries with 'filename' and 'content' for each post
+        """
+        posts = []
+
+        if not os.path.exists(self.output_folder):
+            return posts
+
+        for filename in sorted(os.listdir(self.output_folder)):
+            if filename.endswith('.md') and filename != 'merged-final-post.md':
+                file_path = os.path.join(self.output_folder, filename)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        posts.append({
+                            'filename': filename,
+                            'content': content
+                        })
+                except Exception as e:
+                    logger.error(f"Error reading post {filename}: {e}")
+                    continue
+
+        return posts
+
+    def extract_post_content_for_merge(self, posts):
+        """
+        Extract the main content from generated posts for merging
+
+        Args:
+            posts: List of post dictionaries with 'filename' and 'content'
+
+        Returns:
+            Combined content suitable for the LinkedIn post generator prompt
+        """
+        combined_takeaways = []
+
+        for i, post in enumerate(posts, 1):
+            # Extract content after frontmatter (after the closing ---)
+            content = post['content']
+
+            # Find the end of Jekyll frontmatter
+            frontmatter_end = content.find('---', content.find('---') + 3)
+            if frontmatter_end != -1:
+                post_body = content[frontmatter_end + 3:].strip()
+            else:
+                post_body = content.strip()
+
+            # Remove the "Original Key Takeaways" section if present
+            original_section_start = post_body.find('## Original Key Takeaways:')
+            if original_section_start != -1:
+                post_body = post_body[:original_section_start].strip()
+
+            # Add to combined takeaways with source indicator
+            combined_takeaways.append(f"### Source {i} - {post['filename']}:\n{post_body}")
+
+        return "\n\n---\n\n".join(combined_takeaways)
+
+    def generate_merged_final_post(self):
+        """
+        Generate a merged final post from all individual posts
+
+        Returns:
+            True if merged post was created, False otherwise
+        """
+        logger.info("Checking for multiple posts to merge...")
+
+        # Get all generated posts
+        posts = self.get_all_generated_posts()
+
+        # Skip if only one or no posts
+        if len(posts) <= 1:
+            logger.info(f"Found {len(posts)} post(s). Skipping merge (need at least 2 posts)")
+            return False
+
+        logger.info(f"Found {len(posts)} posts. Creating merged final post...")
+
+        # Extract and combine content from all posts
+        combined_content = self.extract_post_content_for_merge(posts)
+
+        # Generate LinkedIn post using the same prompt
+        logger.info("  Generating merged LinkedIn post...")
+        linkedin_post_raw = self.generate_linkedin_post(combined_content)
+
+        # Parse the response
+        sections = self.parse_linkedin_post(linkedin_post_raw)
+
+        # Format as Jekyll blog post
+        jekyll_post = self.format_jekyll_post("merged-final-post", sections)
+
+        # Save to output file
+        output_file = os.path.join(self.output_folder, "merged-final-post.md")
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(jekyll_post)
+
+        logger.info(f"  Saved merged final post to: {output_file}")
+        return True
+
     def process_file_group(self, base_name, file_list):
         """
         Process a group of file parts and generate LinkedIn post
@@ -628,6 +742,14 @@ categories: {categories_list}
             # Show final summary
             progress_tracker.finish()
             print(f"  📁 Output directory: {self.output_folder}")
+
+            # Automatically generate merged final post if multiple sources exist
+            try:
+                merged = self.generate_merged_final_post()
+                if merged:
+                    print(f"  🔗 Merged final post created: merged-final-post.md")
+            except Exception as e:
+                logger.error(f"Error generating merged final post: {e}")
 
         except Exception as e:
             logger.error(f"Error in process_all_files: {e}")

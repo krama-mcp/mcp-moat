@@ -5,11 +5,24 @@ step06_push_to_github.py
 This script pushes blog posts from a folder (with "-post" suffix) to a GitHub repository.
 It extracts the pure content (excluding "Original Key Takeaways" section) and pushes to GitHub.
 
+Automatic file selection:
+- If merged-final-post.md exists → push ONLY that file (synthesized post from multiple sources)
+- If only one .md file exists → push that single file
+- Otherwise → push all .md files
+
 Usage:
     python step06_push_to_github.py -i /path/to/folder-post
 
 Example:
     python step06_push_to_github.py -i /Users/kiran.ramanna/Documents/github/mcp-moat/wisdomhatch-post
+
+    # If wisdomhatch-post contains:
+    # - source1.md, source2.md, merged-final-post.md
+    # → Only merged-final-post.md will be pushed
+
+    # If wisdomhatch-post contains:
+    # - single-source.md
+    # → single-source.md will be pushed
 """
 
 import os
@@ -174,7 +187,12 @@ class GitHubPublisher:
 
     def get_files_to_process(self):
         """
-        Get list of files to process from input folder
+        Get list of files to process from input folder.
+
+        Automatic selection logic:
+        - If merged-final-post.md exists, push ONLY that file
+        - Otherwise, if there's only one .md file, push that file
+        - Otherwise, push all .md files
 
         Returns:
             List of file info dictionaries
@@ -183,32 +201,48 @@ class GitHubPublisher:
             raise FileNotFoundError(f"Input folder not found: {self.input_folder}")
 
         # Get all .md files from input folder
-        all_files = []
-        for filename in os.listdir(self.input_folder):
-            if filename.endswith('.md'):
-                file_path = os.path.join(self.input_folder, filename)
+        all_md_files = [f for f in os.listdir(self.input_folder) if f.endswith('.md')]
 
-                try:
-                    # Read file to determine GitHub filename
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-
-                    github_filename = self.generate_github_filename(filename, content)
-
-                    all_files.append({
-                        'path': file_path,
-                        'filename': filename,
-                        'github_filename': github_filename
-                    })
-                except Exception as e:
-                    logger.warning(f"Error reading file {filename}: {e}")
-                    continue
-
-        if not all_files:
+        if not all_md_files:
             logger.warning(f"No .md files found in {self.input_folder}")
             return []
 
-        logger.info(f"Found {len(all_files)} files to process")
+        # Automatic selection: prefer merged-final-post.md if exists, else single file
+        merged_file = "merged-final-post.md"
+        if merged_file in all_md_files:
+            # If merged file exists, use only that
+            files_to_use = [merged_file]
+            logger.info(f"Found {merged_file} - will push only merged post")
+        elif len(all_md_files) == 1:
+            # Only one file, use it
+            files_to_use = all_md_files
+            logger.info(f"Found single file: {all_md_files[0]}")
+        else:
+            # Multiple files but no merged file - push all
+            files_to_use = all_md_files
+            logger.info(f"Found {len(all_md_files)} files, no merged post - pushing all")
+
+        all_files = []
+        for filename in files_to_use:
+            file_path = os.path.join(self.input_folder, filename)
+
+            try:
+                # Read file to determine GitHub filename
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                github_filename = self.generate_github_filename(filename, content)
+
+                all_files.append({
+                    'path': file_path,
+                    'filename': filename,
+                    'github_filename': github_filename
+                })
+            except Exception as e:
+                logger.warning(f"Error reading file {filename}: {e}")
+                continue
+
+        logger.info(f"Selected {len(all_files)} file(s) to push")
         return all_files
 
     def preserve_existing_date(self, new_content, existing_content):

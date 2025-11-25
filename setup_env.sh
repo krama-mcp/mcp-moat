@@ -17,4 +17,8 @@ pip install -r requirements.txt
 echo "Installing openai-whisper..."
 pip install openai-whisper
 
+# Install Claude Agent SDK for document processing
+echo "Installing claude-agent-sdk..."
+pip install claude-agent-sdk
+
 echo "Environment setup complete. Activate it with: conda activate mcp-moat"
