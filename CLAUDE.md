@@ -1,0 +1,1 @@
+- for env setup you have to always setup through '/Users/kiran.ramanna/Documents/github/mcp-moat/setup_env.sh'
